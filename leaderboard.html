@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Турнірна таблиця — Економічна теорія</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDEFF4; --surface:#FFFFFF; --ink:#172440; --ink-soft:#55607A; --ink-faint:#8891A6;
+    --accent:#B8862E; --accent-deep:#8C6417; --accent-soft:#F1E4C8; --line:#DADFE8;
+    --gold:#D4AF37; --silver:#B9C0C9; --bronze:#C08552;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,sans-serif; line-height:1.5;}
+  h1,h2,.serif{font-family:'Spectral',Georgia,serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:28px 20px 60px;}
+  header.top{margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:18px;}
+  header.top h1{font-size:1.5rem; font-weight:600; margin:0;}
+  header.top p{margin:4px 0 0; color:var(--ink-soft); font-size:0.9rem;}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px;}
+  select{padding:8px 12px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:0.9rem; margin-bottom:16px; background:#fff;}
+  table{width:100%; border-collapse:collapse; font-size:0.92rem;}
+  th,td{text-align:left; padding:10px; border-bottom:1px solid var(--line);}
+  th{color:var(--ink-soft); font-weight:600; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.02em;}
+  .rank{font-weight:700; width:36px;}
+  .rank.gold{color:var(--gold);}
+  .rank.silver{color:#8b939c;}
+  .rank.bronze{color:var(--bronze);}
+  .pct{font-weight:700;}
+  .tag{font-size:0.72rem; padding:2px 8px; border-radius:20px; background:var(--bg); color:var(--ink-soft); font-weight:600;}
+  .empty-hint{text-align:center; color:var(--ink-faint); padding:40px 0;}
+  .updated{font-size:0.78rem; color:var(--ink-faint); margin-top:14px; text-align:right;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Турнірна таблиця</h1>
+    <p>Найкращі результати контрольного тестування з економічної теорії</p>
+  </header>
+  <div class="panel">
+    <select id="groupFilter"><option value="">Усі групи</option></select>
+    <div id="tableWrap"><div class="empty-hint">Завантаження…</div></div>
+    <div class="updated" id="updatedNote"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCh6Rablk-wqtjwoLt16pAm9Xotey8oSnM",
+  authDomain: "econtheory-tests.firebaseapp.com",
+  projectId: "econtheory-tests",
+  storageBucket: "econtheory-tests.firebasestorage.app",
+  messagingSenderId: "89329400825",
+  appId: "1:89329400825:web:887e0ef760a6f1c011db28"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+let allEntries = [];
+
+function formatName(fullName){
+  // очікуваний формат "Прізвище Ім'я По-батькові" → показуємо "Ім'я П."
+  if(!fullName) return "Анонім";
+  const parts = fullName.trim().split(/\s+/);
+  if(parts.length < 2) return fullName;
+  const surname = parts[0];
+  const firstName = parts[1];
+  return `${firstName} ${surname[0]}.`;
+}
+
+async function load(){
+  const wrap = document.getElementById("tableWrap");
+  try{
+    const snap = await getDocs(collection(db, "leaderboard"));
+    allEntries = snap.docs.map(d=>({code:d.id, ...d.data()}));
+    populateGroups();
+    render();
+    document.getElementById("updatedNote").textContent = `Записів: ${allEntries.length}`;
+  }catch(e){
+    wrap.innerHTML = `<div class="empty-hint">Не вдалося завантажити дані: ${e.message}</div>`;
+  }
+}
+
+function populateGroups(){
+  const groups = [...new Set(allEntries.map(e=>e.group).filter(Boolean))].sort();
+  const sel = document.getElementById("groupFilter");
+  sel.innerHTML = `<option value="">Усі групи</option>` + groups.map(g=>`<option value="${g}">${g}</option>`).join("");
+}
+document.getElementById("groupFilter").addEventListener("change", render);
+
+function render(){
+  const wrap = document.getElementById("tableWrap");
+  const filterGroup = document.getElementById("groupFilter").value;
+  const rows = allEntries
+    .filter(e=>!filterGroup || e.group===filterGroup)
+    .sort((a,b)=>(b.bestPct||0)-(a.bestPct||0));
+
+  if(rows.length===0){ wrap.innerHTML = `<div class="empty-hint">Результатів поки немає</div>`; return; }
+
+  const rankClass = (i)=> i===0 ? "gold" : i===1 ? "silver" : i===2 ? "bronze" : "";
+
+  wrap.innerHTML = `<table><thead><tr>
+    <th>#</th><th>Студент</th><th>Група</th><th>Найкращий результат</th>
+  </tr></thead><tbody>` + rows.map((r,i)=>`
+    <tr>
+      <td class="rank ${rankClass(i)}">${i+1}</td>
+      <td>${formatName(r.name)}</td>
+      <td><span class="tag">${r.group||"—"}</span></td>
+      <td class="pct">${r.bestPct}%${r.bestGrade ? ` · ${r.bestGrade}` : ""}</td>
+    </tr>`).join("") + `</tbody></table>`;
+}
+
+load();
+</script>
+</body>
+</html>
